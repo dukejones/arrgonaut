@@ -1,0 +1,190 @@
+---
+###
+# Check https://github.com/ray-rock/containarr/wiki for more information/documentation. If you run into an issue
+# not covered in the comments or documents, please open a discussion or an issue at https://github.com/ray-rock/containarr
+###
+version: "3.8"
+
+###
+# These are docker volumes. Most people only need a single data volume. This volume can be local, or somewhere else... Example SMB config provided below.
+# If you're on a gnu/linux distro, you may need to install cifs-utils. See https://github.com/ray-rock/containarr/wiki for more info.
+###
+#volumes:               # Don't use named volumes unless you know what you're doing...
+#data:
+# driver_opts:
+#     type: cifs
+#     o: "guest"
+#     device: "//{SERVER_IP}/data"
+
+# downloads:          # Use this configuration if you know what you're doing!
+#     driver_opts:
+#         type: cifs
+#         o: "guest"
+#         device: "//{SERVER_IP}/downloads"
+# media:
+#     driver_opts:
+#         type: cifs
+#         o: "guest"
+#         device: "//{SERVER_IP}/media"
+
+# volumes:
+#   nginx_secrets:
+
+services:
+  ###
+  # This is the portal where you access all of your arr!
+  # I made this! https://github.com/ray-rock/
+  ###
+  # portal:
+  #     image: localhost.local/containarr/portal
+  #     container_name: portal
+  #     build: build/portal/.
+  #     network_mode: "service:gluetun"
+
+  # nginx:
+  #     image: jonasal/nginx-certbot:latest
+  #     env_file:
+  #         - ./nginx-certbot.env
+  #     volumes:
+  #         - nginx_secrets:/etc/letsencrypt
+  #         - ./build/portal/config/nginx/sites-available:/etc/nginx/user_conf.d
+  #         - ./build/portal/config/nginx/snippets:/etc/nginx/snippets
+  #     network_mode: "service:gluetun"
+
+  ###
+  # This is the VPN provider. Anything routed through this will be tunneled through your VPN.
+  # https://github.com/qdm12/gluetun
+  ###
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    env_file:
+      - config/gluetun/vpn-config.env # See https://github.com/qdm12/gluetun/wiki for info on configuring your vpn.
+    ports:
+      # - 80:80                           # nginx reverse proxy
+      # - 443:443                          # portal ssl
+      - 8080:8080 # qbittorrent
+      - 6595:6595 # deemix
+      - 8989:8989 # sonarr
+      - 7878:7878 # radarr
+      - 9696:9696 # prowlarr
+      - 8787:8787 # readarr
+      - 9117:9117 # jackett
+    restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ###
+  # This is qbittorrent, a lightweight bittorrent client with a built-in web ui.
+  # Uses the linuxserver qbittorrent docker image. Credits:
+  # https://www.qbittorrent.org/
+  # https://github.com/linuxserver/docker-qbittorrent
+  # https://hub.docker.com/r/linuxserver/qbittorrent
+  ###
+  qbittorrent:
+    restart: always
+    network_mode: "service:gluetun"
+    image: lscr.io/linuxserver/qbittorrent
+    container_name: qbittorrent
+    environment:
+      - PUID=998
+      - PGID=998
+      - UMASK=022
+      - UMASK_SET=022
+      - TZ=UTC
+      - WEBUI_PORT=8080
+    volumes:
+      - ./config/qbt:/config
+      - /Media/qbittorrent:/data/qbittorrent
+      # - downloads:/downloads
+
+  ###
+  #  "deemix (lowercase) is a barebone deezer downloader library built from the ashes of Deezloader Remix."
+  #   https://gitlab.com/Bockiii/deemix-docker
+  #   https://deemix.app/
+  ###
+  deemix:
+    restart: always
+    network_mode: "service:gluetun"
+    image: registry.gitlab.com/bockiii/deemix-docker
+    container_name: Deemix
+    environment:
+      - PUID=998
+      - PGID=998
+      - UMASK_SET=022
+      - TZ=UTC
+      - DEEMIX_SINGLE_USER=true
+    volumes:
+      - ./config/deemix:/config
+      - /Media:/data
+      # - downloads:/downloads
+
+  ###
+  #   Sonarr: Collect and organize TV shows. Uses linuxserver docker-sonarr image.
+  #   https://sonarr.tv/
+  #   https://github.com/Sonarr/Sonarr
+  #   https://hub.docker.com/r/linuxserver/sonarr
+  #   https://github.com/linuxserver/docker-sonarr
+  ###
+  sonarr:
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    image: lscr.io/linuxserver/sonarr
+    container_name: sonarr
+    environment:
+      - PUID=998
+      - PGID=998
+      - UMASK=022
+      - UMASK_SET=022
+      - TZ=UTC
+    volumes:
+      - ./config/sonarr:/config
+      - /Media:/data
+      # - downloads:/downloads
+      # - media:/media
+
+  ###
+  #   Radarr: collect and organize movies. Uses linuxserver docker-radarr image.
+  #   https://radarr.tv/
+  #   https://github.com/Radarr/Radarr
+  #   https://hub.docker.com/r/linuxserver/radarr
+  #   https://github.com/linuxserver/docker-radarr
+  ###
+  radarr:
+    restart: always
+    network_mode: "service:gluetun"
+    image: lscr.io/linuxserver/radarr
+    container_name: radarr
+    environment:
+      - PUID=998
+      - PGID=998
+      - UMASK=022
+      - UMASK_SET=022
+      - TZ=UTC
+    volumes:
+      - ./config/radarr:/config
+      - /Media:/data
+      # - downloads:/downloads
+      # - media:/media
+
+  ###
+  #   Prowlarr: collect and organize movies. Uses linuxserver docker-prowlarr image.
+  #   https://github.com/Prowlarr/Prowlarr
+  #   https://hub.docker.com/r/linuxserver/prowlarr
+  #   https://github.com/linuxserver/docker-prowlarr
+  ###
+  prowlarr:
+    restart: always
+    network_mode: "service:gluetun"
+    image: lscr.io/linuxserver/prowlarr:develop
+    container_name: prowlarr
+    environment:
+      - PUID=998
+      - PGID=998
+      - UMASK=022
+      - UMASK_SET=022
+      - TZ=UTC
+    volumes:
+      - ./config/prowlarr:/config
