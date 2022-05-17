@@ -1,2 +1,0 @@
-#!/bin/bash
-rsync -avz $(dirname $0)/../* duke@lenovo.local:~/killinIt/
