@@ -1,7 +1,10 @@
 
 
-sonarr 8989
-radarr 7878
-prowlarr 9696
-readarr 8787
+sonarr       8989
+radarr       7878
+prowlarr     9696
+readarr      8787
 transmission 9091
+nzbget       6789
+lidarr       8686 
+hydra2       5076
