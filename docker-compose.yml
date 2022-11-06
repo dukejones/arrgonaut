@@ -51,6 +51,20 @@ services:
     restart: always
 
 
+  heimdall:
+    image: lscr.io/linuxserver/heimdall:latest
+    container_name: heimdall
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=US/Pacific
+    volumes:
+      - ./config/heimdall:/config
+    ports:
+      - 80:80
+      - 443:443
+    restart: unless-stopped
+
   nzbget:
     image: lscr.io/linuxserver/nzbget:latest
     container_name: nzbget
@@ -94,7 +108,7 @@ services:
       - /Media:/media
     depends_on:
       - transmission
-    restart: always
+    restart: unless-stopped
 
   radarr:
     image: linuxserver/radarr:latest
@@ -107,10 +121,11 @@ services:
     volumes:
       - ./config/radarr:/config
       - /Media/Torrent:/downloads/complete
+      - /Media/NZBs/completed:/downloads/completed
       - /Media:/media
     depends_on:
       - transmission
-    restart: always
+    restart: unless-stopped
 
   lidarr:
     image: lscr.io/linuxserver/lidarr:latest
@@ -145,7 +160,7 @@ services:
     network_mode: "service:gluetun"
     depends_on:
       - gluetun
-    restart: always
+    restart: unless-stopped
 
   transmission:
     image: linuxserver/transmission
@@ -160,7 +175,7 @@ services:
     network_mode: "service:gluetun"
     depends_on:
       - gluetun
-    restart: always
+    restart: unless-stopped
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
