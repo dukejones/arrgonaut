@@ -6,12 +6,6 @@
 version: "3.8"
 
 services:
-  # portal:
-  #     image: localhost.local/containarr/portal
-  #     container_name: portal
-  #     build: build/portal/.
-  #     network_mode: "service:gluetun"
-
   ###
   # This is the VPN provider. Anything routed through this will be tunneled through your VPN.
   # https://github.com/qdm12/gluetun
@@ -40,17 +34,18 @@ services:
       - 6789:6789 # nzbget
       - 8686:8686 # lidarr
       - 5076:5076 # hydra
+      - 8080:8081 # sabnzb
     environment:
       - PUID=1000
       - PGID=1000
-      - FIREWALL_OUTBOUND_SUBNETS=10.0.0.0/8
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24
       - HTTPPROXY=on
     dns:
       - 209.222.18.222 # Default to PIA DNS servers
       - 209.222.18.218
     restart: always
 
-
+  ### DIRECTORY ###
   heimdall:
     image: lscr.io/linuxserver/heimdall:latest
     container_name: heimdall
@@ -65,6 +60,22 @@ services:
       - 443:443
     restart: unless-stopped
 
+  ### DOWNLOADERS ###
+  transmission:
+    image: linuxserver/transmission
+    container_name: transmission
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./config/transmission:/config
+      - /Media:/data
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # ! Deprecated!
   nzbget:
     image: lscr.io/linuxserver/nzbget:latest
     container_name: nzbget
@@ -77,23 +88,38 @@ services:
       # - NZBGET_PASS=tegbzn6789 #optional
     volumes:
       - ./config/nzbget:/config
-      - /Media/NZBs:/downloads #optional
+      - /Media:/data
     restart: unless-stopped
 
-  nzbhydra2:
-    image: lscr.io/linuxserver/nzbhydra2:latest
-    container_name: nzbhydra2
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
     network_mode: "service:gluetun"
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=US/Pacific
     volumes:
-      - ./config/hydra2:/config
-      - /Media/Torrent:/downloads
+      # - /path/to/downloads:/downloads #optional
+      # - /path/to/incomplete/downloads:/incomplete-downloads #optional
+      - ./config/sabnzb:/config
+      - /Media:/data
     restart: unless-stopped
 
+  # nzbhydra2:
+  #   image: lscr.io/linuxserver/nzbhydra2:latest
+  #   container_name: nzbhydra2
+  #   network_mode: "service:gluetun"
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=US/Pacific
+  #   volumes:
+  #     - ./config/hydra2:/config
+  #     - /Media/Usenet:/downloads
+  #   restart: unless-stopped
 
+  ### ARRRRRRRRR ###
   sonarr:
     image: linuxserver/sonarr:latest
     container_name: sonarr
@@ -104,8 +130,10 @@ services:
       - UMASK_SET=022
     volumes:
       - ./config/sonarr:/config
-      - /Media/Torrent:/downloads/complete
-      - /Media:/media
+      - /Media:/data
+      # - /Media/Torrent:/downloads/complete
+      # - /Media/NZBs/completed/Series:/downloads/completed
+      # - /Media:/media
     depends_on:
       - transmission
     restart: unless-stopped
@@ -120,9 +148,10 @@ services:
       - UMASK_SET=022
     volumes:
       - ./config/radarr:/config
-      - /Media/Torrent:/downloads/complete
-      - /Media/NZBs/completed:/downloads/completed
-      - /Media:/media
+      - /Media:/data
+      # - /Media/Torrent:/downloads/complete
+      # - /Media/NZBs/completed/Movies:/downloads/completed
+      # - /Media:/media
     depends_on:
       - transmission
     restart: unless-stopped
@@ -136,8 +165,7 @@ services:
       - TZ=US/Pacific
     volumes:
       - ./config/lidarr:/config
-      - /Media/:/music #optional
-      - /Media/Torrent:/downloads #optional
+      - /Media:/data
     network_mode: "service:gluetun"
     restart: unless-stopped
 
@@ -162,21 +190,7 @@ services:
       - gluetun
     restart: unless-stopped
 
-  transmission:
-    image: linuxserver/transmission
-    container_name: transmission
-    environment:
-      - PUID=1000
-      - PGID=1000
-    volumes:
-      - ./config/transmission:/config
-      - /Media/Torrent:/downloads/complete
-      - /Media/Torrent/incomplete:/downloads/incomplete
-    network_mode: "service:gluetun"
-    depends_on:
-      - gluetun
-    restart: unless-stopped
-
+  ### MISC ###
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr
@@ -184,46 +198,3 @@ services:
       - LOG_LEVEL=info
     network_mode: "service:gluetun"
     restart: unless-stopped
-
-  ###
-  #  "deemix (lowercase) is a barebone deezer downloader library built from the ashes of Deezloader Remix."
-  #   https://gitlab.com/Bockiii/deemix-docker
-  #   https://deemix.app/
-  ###
-  # deemix:
-  #   image: registry.gitlab.com/bockiii/deemix-docker
-  #   container_name: Deemix
-  #   restart: always
-  #   environment:
-  #     - PUID=998
-  #     - PGID=998
-  #     - UMASK_SET=022
-  #     - DEEMIX_SINGLE_USER=true
-  #   volumes:
-  #     - deemix-config:/config
-  #     - /Media:/media
-  #   network_mode: "service:gluetun"
-
-
-
-###
-# These are docker volumes. Most people only need a single data volume. This volume can be local, or somewhere else... Example SMB config provided below.
-# If you're on a gnu/linux distro, you may need to install cifs-utils. See https://github.com/ray-rock/containarr/wiki for more info.
-###
-#volumes:               # Don't use named volumes unless you know what you're doing...
-#data:
-# driver_opts:
-#     type: cifs
-#     o: "guest"
-#     device: "//{SERVER_IP}/data"
-
-# downloads:          # Use this configuration if you know what you're doing!
-#     driver_opts:
-#         type: cifs
-#         o: "guest"
-#         device: "//{SERVER_IP}/downloads"
-# media:
-#     driver_opts:
-#         type: cifs
-#         o: "guest"
-#         device: "//{SERVER_IP}/media"
