@@ -34,7 +34,7 @@ services:
       - 6789:6789 # nzbget
       - 8686:8686 # lidarr
       - 5076:5076 # hydra
-      - 8080:8081 # sabnzb
+      - 8081:8080 # sabnzb
     environment:
       - PUID=1000
       - PGID=1000
