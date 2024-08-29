@@ -1,8 +1,4 @@
 ---
-###
-# Check https://github.com/ray-rock/containarr/wiki for more information/documentation. If you run into an issue
-# not covered in the comments or documents, please open a discussion or an issue at https://github.com/ray-rock/containarr
-###
 version: "3.8"
 
 services:
@@ -25,16 +21,16 @@ services:
       - 9091:9091 # Transmission
       - 51413:51413 # Transmission
       - 51413:51413/udp # Transmission
+      - 8191:8191 # flaresolverr
       # - 6595:6595 # deemix
       - 8989:8989 # sonarr
       - 7878:7878 # radarr
       - 9696:9696 # prowlarr
       - 8787:8787 # readarr
-      - 8191:8191 # flaresolverr
-      - 6789:6789 # nzbget
       - 8686:8686 # lidarr
-      - 5076:5076 # hydra
       - 8081:8080 # sabnzb
+      - 6789:6789 # nzbget
+      # - 5076:5076 # hydra
     environment:
       - PUID=1000
       - PGID=1000
@@ -75,7 +71,7 @@ services:
       - gluetun
     restart: unless-stopped
 
-  # ! Deprecated!
+  # Deprecated?
   nzbget:
     image: lscr.io/linuxserver/nzbget:latest
     container_name: nzbget
@@ -84,8 +80,8 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=US/Pacific
-      # - NZBGET_USER=nzbget #optional
-      # - NZBGET_PASS=tegbzn6789 #optional
+      - NZBGET_USER=admin
+      - NZBGET_PASS=admin
     volumes:
       - ./config/nzbget:/config
       - /Media:/data
@@ -106,20 +102,29 @@ services:
       - /Media:/data
     restart: unless-stopped
 
-  # nzbhydra2:
-  #   image: lscr.io/linuxserver/nzbhydra2:latest
-  #   container_name: nzbhydra2
-  #   network_mode: "service:gluetun"
-  #   environment:
-  #     - PUID=1000
-  #     - PGID=1000
-  #     - TZ=US/Pacific
-  #   volumes:
-  #     - ./config/hydra2:/config
-  #     - /Media/Usenet:/downloads
-  #   restart: unless-stopped
-
   ### ARRRRRRRRR ###
+  ###
+  #   Prowlarr: Single place for all the indexers. Connect the other arr's to this.
+  #   https://github.com/Prowlarr/Prowlarr
+  #   https://hub.docker.com/r/linuxserver/prowlarr
+  #   https://github.com/linuxserver/docker-prowlarr
+  ###
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:develop
+    container_name: prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - UMASK_SET=022
+    volumes:
+      - ./config/prowlarr:/config
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # TV Shows & Series
   sonarr:
     image: linuxserver/sonarr:latest
     container_name: sonarr
@@ -138,6 +143,7 @@ services:
       - transmission
     restart: unless-stopped
 
+  # Movies
   radarr:
     image: linuxserver/radarr:latest
     container_name: radarr
@@ -169,25 +175,19 @@ services:
     network_mode: "service:gluetun"
     restart: unless-stopped
 
-  ###
-  #   Prowlarr: collect and organize movies. Uses linuxserver docker-prowlarr image.
-  #   https://github.com/Prowlarr/Prowlarr
-  #   https://hub.docker.com/r/linuxserver/prowlarr
-  #   https://github.com/linuxserver/docker-prowlarr
-  ###
-  prowlarr:
-    image: lscr.io/linuxserver/prowlarr:develop
-    container_name: prowlarr
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    network_mode: "service:gluetun"
     environment:
       - PUID=1000
       - PGID=1000
-      - UMASK=022
       - UMASK_SET=022
     volumes:
-      - ./config/prowlarr:/config
-    network_mode: "service:gluetun"
+      - ./config/readarr:/config
+      - /Media:/data
     depends_on:
-      - gluetun
+      - transmission
     restart: unless-stopped
 
   ### MISC ###
@@ -198,3 +198,44 @@ services:
       - LOG_LEVEL=info
     network_mode: "service:gluetun"
     restart: unless-stopped
+
+  # Easy web-based access to the filesystem
+  filebrowser:
+    image: filebrowser/filebrowser
+    volumes:
+      - /Media:/srv
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+  # A platform for accessing the audiobooks you own wherever you are.
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    ports:
+      - 13378:80
+    volumes:
+      - /Media/Books:/audiobooks
+      # - </path/to/podcasts>:/podcasts
+      - ./config/audiobookshelf:/config
+      - /Media/Books/metadata:/metadata
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=US/Pacific
+
+  # booksonic-air:
+  #   image: lscr.io/linuxserver/booksonic-air:latest
+  #   container_name: booksonic
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=US/Pacific
+  #     #- CONTEXT_PATH=url-base #optional
+  #   volumes:
+  #     - ./config/booksonic:/config
+  #     - /Media/Books:/audiobooks
+  #     #- /path/to/podcasts:/podcasts
+  #     #- /path/to/othermedia:/othermedia
+  #   ports:
+  #     - 4040:4040
+  #   restart: unless-stopped
